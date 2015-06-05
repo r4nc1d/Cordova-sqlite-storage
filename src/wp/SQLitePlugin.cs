@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.IO.IsolatedStorage;
 using System.Runtime.Serialization;
 using System.Threading;
-
+using System.Windows;
 using SQLite;
 
 using WPCordovaClassLib.Cordova;
@@ -27,6 +28,9 @@ namespace Cordova.Extension.Commands
 
             [DataMember(IsRequired = false, Name = "bgType", EmitDefaultValue = false)]
             public int bgType = 0;
+			
+			[DataMember(IsRequired = false, Name = "createFromResource")]
+            public int createFromResource = 0;
         }
 
         [DataContract]
@@ -109,7 +113,10 @@ namespace Cordova.Extension.Commands
                 mycbid = jsonOptions[1];
 
                 var dbOptions = JsonHelper.Deserialize<SQLitePluginOpenOptions>(jsonOptions[0]);
-                this.databaseManager.Open(dbOptions.name, mycbid);
+                if (dbOptions.createFromResource == 1)
+                    copyDatabase(dbOptions.name);
+				
+				this.databaseManager.Open(dbOptions.name, mycbid);
             }
             catch (Exception)
             {
@@ -171,6 +178,29 @@ namespace Cordova.Extension.Commands
             }
         }
 
+		 private static void copyDatabase(string databaseName)
+        {
+            var fileUri = new Uri(string.Format("www\\{0}.db", databaseName), UriKind.RelativeOrAbsolute);
+            SaveFileToIsolatedStorage(fileUri, string.Format("{0}.db", databaseName));
+        }
+
+        private static void SaveFileToIsolatedStorage(Uri fileUri, string fileName)
+        {
+            using (var appIsolatedStorage = IsolatedStorageFile.GetUserStoreForApplication())
+            {
+                var file = appIsolatedStorage.CreateFile(fileName);
+                var fileData = Application.GetResourceStream(fileUri);
+                var bytes = new byte[4096];
+
+                int count;
+
+                while ((count = fileData.Stream.Read(bytes, 0, 4096)) > 0)
+                    file.Write(bytes, 0, count);
+
+                file.Close();
+            }
+        }
+		
         /// <summary>
         /// Manage the collection of currently open databases and queue requests for them
         /// </summary>
